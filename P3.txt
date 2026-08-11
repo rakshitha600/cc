@@ -1,0 +1,84 @@
+import java.text.DecimalFormat;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.LinkedList;
+import java.util.List;
+
+import org.cloudbus.cloudsim.*;
+import org.cloudbus.cloudsim.core.CloudSim;
+import org.cloudbus.cloudsim.provisioners.*;
+
+public class CloudSimExample1Shortcut {
+
+    public static void main(String[] args) {
+        Log.printLine("Starting CloudSimExample1...");
+
+        try {
+            // 1. Initialize CloudSim
+            CloudSim.init(1, Calendar.getInstance(), false);
+
+            // 2 & 3. Create Datacenter and Broker
+            Datacenter datacenter0 = createDatacenter("Datacenter_0");
+            DatacenterBroker broker = new DatacenterBroker("Broker");
+
+            // 4. Create and submit VM
+            Vm vm = new Vm(0, broker.getId(), 1000, 1, 512, 1000, 10000, "Xen", new CloudletSchedulerTimeShared());
+            broker.submitVmList(Arrays.asList(vm));
+
+            // 5. Create and submit Cloudlet
+            UtilizationModel um = new UtilizationModelFull();
+            Cloudlet cloudlet = new Cloudlet(0, 400000, 1, 300, 300, um, um, um);
+            cloudlet.setUserId(broker.getId());
+            cloudlet.setVmId(vm.getId());
+            broker.submitCloudletList(Arrays.asList(cloudlet));
+
+            // 6. Run Simulation
+            CloudSim.startSimulation();
+            CloudSim.stopSimulation();
+
+            // 7. Print Results
+            printCloudletList(broker.getCloudletReceivedList());
+            datacenter0.printDebts();
+
+            Log.printLine("CloudSimExample1 finished!");
+        } catch (Exception e) {
+            e.printStackTrace();
+            Log.printLine("Unwanted errors happen");
+        }
+    }
+
+    private static Datacenter createDatacenter(String name) throws Exception {
+        
+        List<Pe> peList = Arrays.asList(new Pe(0, new PeProvisionerSimple(1000)));
+        List<Host> hostList = Arrays.asList(new Host(
+                0, new RamProvisionerSimple(2048), new BwProvisionerSimple(10000), 1000000, 
+                peList, new VmSchedulerTimeShared(peList)
+        ));
+
+        DatacenterCharacteristics characteristics = new DatacenterCharacteristics(
+                "x86", "Linux", "Xen", hostList, 10.0, 3.0, 0.05, 0.001, 0.0
+        );
+        
+        // THE FIX: Added <Storage> inside the LinkedList diamond operator for Java 7 compatibility
+        return new Datacenter(name, characteristics, new VmAllocationPolicySimple(hostList), new LinkedList<Storage>(), 0);
+    }
+
+    private static void printCloudletList(List<Cloudlet> list) {
+        Log.printLine("\n========== OUTPUT ==========");
+        Log.printLine("Cloudlet ID    STATUS    Data center ID    VM ID    Time    Start Time    Finish Time");
+
+        DecimalFormat dft = new DecimalFormat("###.##");
+        for (Cloudlet cloudlet : list) {
+            if (cloudlet.getCloudletStatus() == Cloudlet.SUCCESS) {
+                System.out.printf("    %-10d SUCCESS   %-17d %-8d %-7s %-13s %s%n",
+                        cloudlet.getCloudletId(),
+                        cloudlet.getResourceId(),
+                        cloudlet.getVmId(),
+                        dft.format(cloudlet.getActualCPUTime()),
+                        dft.format(cloudlet.getExecStartTime()),
+                        dft.format(cloudlet.getFinishTime())
+                );
+            }
+        }
+    }
+}
